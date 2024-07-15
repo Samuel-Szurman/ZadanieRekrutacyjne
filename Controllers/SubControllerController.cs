@@ -8,11 +8,11 @@ namespace ZadanieRekrutacyjne.Controllers
 {
     [Route("api/[controller]/[action]")]
     [ApiController]
-    public class ContactController : ControllerBase
+    public class SubCategoryController : ControllerBase
     {
         private readonly ApiContext _context;
 
-        public ContactController(ApiContext context)
+        public SubCategoryController(ApiContext context)
         {
             _context = context;
         }
@@ -20,31 +20,25 @@ namespace ZadanieRekrutacyjne.Controllers
         // Create or edit
         [AllowAnonymous]
         [HttpPost]
-        public JsonResult CreateEdit(Contact contact)
+        public JsonResult CreateEdit(SubCategory subCategory)
         {
-            var existingContact = _context.Contacts.FirstOrDefault(c => c.Email == contact.Email);
-            if (existingContact != null && existingContact.Id != contact.Id)
+            if (subCategory.Id == 0)
             {
-                return new JsonResult(BadRequest("Kontakt o podanym adresie email już istnieje."));
-            }
-
-            if (contact.Id == 0)
-            {
-                _context.Contacts.Add(contact);
+                _context.SubCategories.Add(subCategory);
             }
             else
             {
-                var contactInDb = _context.Contacts.Find(contact.Id);
-                if (contactInDb == null)
+                var subCategoryInDb = _context.SubCategories.Find(subCategory.Id);
+                if (subCategoryInDb == null)
                 {
                     return new JsonResult(NotFound());
                 }
-                _context.Entry(contactInDb).CurrentValues.SetValues(contact);
+                _context.Entry(subCategoryInDb).CurrentValues.SetValues(subCategory);
             }
 
             _context.SaveChanges();
 
-            return new JsonResult(Ok(contact));
+            return new JsonResult(Ok(subCategory));
         }
 
         // Get
@@ -52,8 +46,8 @@ namespace ZadanieRekrutacyjne.Controllers
         [HttpGet]
         public JsonResult Get(int id)
         {
-            var result = _context.Contacts.Find(id);
-            if(result == null)
+            var result = _context.SubCategories.Find(id);
+            if (result == null)
             {
                 return new JsonResult(NotFound());
             }
@@ -64,20 +58,9 @@ namespace ZadanieRekrutacyjne.Controllers
         // Get all
         [AllowAnonymous]
         [HttpGet]
-        public JsonResult GetAllPublic()
+        public JsonResult GetAll()
         {
-            var result = _context.Contacts
-            .Select(c => new { c.FirstName, c.LastName, c.Email })
-            .ToList();
-
-            return new JsonResult(Ok(result));
-        }
-
-        [AllowAnonymous]
-        [HttpGet]
-        public JsonResult GetAllPrivate()
-        {
-            var result = _context.Contacts.ToList();
+            var result = _context.SubCategories.ToList();
 
             return new JsonResult(Ok(result));
         }
@@ -87,14 +70,14 @@ namespace ZadanieRekrutacyjne.Controllers
         [HttpDelete("{id:int}")]
         public JsonResult Delete(int id)
         {
-            var result = _context.Contacts.Find(id);
+            var result = _context.SubCategories.Find(id);
 
             if (result == null)
             {
                 return new JsonResult(NotFound());
             }
 
-            _context.Contacts.Remove(result);
+            _context.SubCategories.Remove(result);
             _context.SaveChanges();
 
             return new JsonResult(Ok(result));
