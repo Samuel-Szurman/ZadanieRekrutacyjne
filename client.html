@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baza kontaktów</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .form-group {
+            margin-bottom: 1em;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5em;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        .form-group button {
+            padding: 0.5em 1em;
+        }
+        #contacts {
+            margin-top: 2em;
+        }
+        #contacts table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #contacts th, #contacts td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        #contacts th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-form" class="form-group">
+        <h2>Logowanie</h2>
+        <label for="email">E-mail:</label>
+        <input type="text" id="email" style="width: 200px;">
+        <label for="password">Hasło:</label>
+        <input type="password" id="password" style="width: 200px;">
+        <br>
+        <button onclick="performLogin()">Zaloguj się</button>
+    </div>
+
+    <div id="logout-form" class="form-group" style="display: none">
+        <h2 id="logged-as">Zalogowano jako</h2>
+        <button onclick="logout()">Wyloguj się</button>
+        <br>
+    </div>
+
+    <div id="add-contact" class="form-group" style="display: none;">
+        <h2>Nowy kontakt</h2>
+        <label for="first-name">Imię:</label>
+        <input type="text" id="first-name" style="width: 200px;">
+        <label for="last-name">Nazwisko:</label>
+        <input type="text" id="last-name" style="width: 200px;">
+        <label for="email">E-mail:</label>
+        <input type="email" id="email" style="width: 200px;">
+        <label for="password">Hasło:</label>
+        <input type="password" id="password" style="width: 200px;">
+        <label for="phone-number">Numer telefonu:</label>
+        <input type="text" id="phone-number" style="width: 200px;">
+        <label for="birth-date">Data urodzenia:</label>
+        <input type="date" id="birth-date" style="width: 200px;">
+        <label for="category">Kategoria:</label>
+        <select id="category" onchange="updateSubCategory()" style="width: 220px;" >
+        </select>
+        <label for="sub-category">Podkategoria:</label>
+        <select type="text" id="sub-category" style="width: 200px;">
+        </select>
+        <br>
+        <button onclick="addContact()" style="width: 220px;">Dodaj kontakt</button>
+    </div>
+
+    <div id="contacts">
+        <h2>Kontakty</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Imię</th>
+                    <th>Nazwisko</th>
+                    <th>E-mail</th>
+                    <th>Hasło</th>
+                    <th>Numer telefonu</th>
+                    <th>Data urodzenia</th>
+                    <th>Kategoria</th>
+                    <th>Podkategoria</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody id="contacts-list">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+
+        // pobieranie publicznie dostępnych informacji o kontaktach
+        async function loadContactsPublic() {
+            const url = 'https://localhost:44320/api/Contact/GetAllPublic';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const contacts = data.value;
+                const contactsList = document.getElementById('contacts-list');
+
+                contacts.forEach(contact => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${contact.firstName}</td>
+                        <td>${contact.lastName}</td>
+                        <td>${contact.email}</td>
+                        <td>Niedostępne</td>
+                        <td>Niedostępne</td>
+                        <td>Niedostępne</td>
+                        <td>Niedostępne</td>
+                        <td>Niedostępne</td>
+                        <td>Niedostępne</td>
+                    `;
+                    contactsList.appendChild(row);
+                });
+            } catch (error) {
+                alert('Wystąpił błąd przy wczytywaniu kontaktów');
+            }
+        }
+
+        //edycja istniejącego kontaktu
+        async function editContact(id) {
+            const password = document.querySelector('#row_' + id + ' #password').value;
+            if (validatePassword(password)){
+                const contact = {
+                    id: id,
+                    firstName: document.querySelector('#row_' + id + ' #first-name').value,
+                    lastName: document.querySelector('#row_' + id + ' #last-name').value,
+                    email: document.querySelector('#row_' + id + ' #email').value,
+                    password: document.querySelector('#row_' + id + ' #password').value,
+                    category: document.querySelector('#row_' + id + ' #category').value,
+                    subCategory: document.querySelector('#row_' + id + ' #sub-category').value,
+                    phone: document.querySelector('#row_' + id + ' #phone-number').value,
+                    birthDate: document.querySelector('#row_' + id + ' #birth-date').value,
+                };
+
+                const response = await fetch('https://localhost:44320/api/Contact/CreateEdit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(contact)
+                });
+
+                if (response.ok) {
+                    loadContactsPrivate();
+                } else {
+                    alert('Wystąpił błąd przy dodawania kontaktu');
+                }
+            }
+        }
+
+
+        // logowanie (autoryzacja)
+        async function login(email, password) {
+            const response = await fetch('https://localhost:44320/api/Auth/Login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 'email': email, 'password': password })
+            });
+
+            if (!response.ok) {
+                alert('Nieudane logowanie');
+                return null;
+            }
+
+            const data = await response.json();
+            return data.token;
+        }
+
+
+        // logowanie (cała procedura)
+        async function performLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            const token = await login(email, password);
+            if (token) {
+                localStorage.setItem('jwtToken', token);
+                document.getElementById('logged-as').innerHTML = "Zalogowano jako: " + email;
+                loadContactsPrivate();
+            }
+        }
+
+        // wylogowanie
+        function logout() {
+            localStorage.removeItem('jwtToken');
+            // alert('You have been logged out');
+            document.getElementById('logout-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('add-contact').style.display = 'none';
+            const contactsList = document.getElementById('contacts-list');
+            contactsList.innerHTML = '';
+            loadContactsPublic();
+        }
+
+        // pobieranie prywatnych danych o kontaktach
+        async function loadContactsPrivate() {
+            const url = 'https://localhost:44320/api/Contact/GetAllPrivate';
+            const token = localStorage.getItem('jwtToken');
+            bearer = 'Bearer ' + token;
+            if (!token) {
+                alert('Należy się najpierw zalogować');
+                return;
+            }
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': bearer,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const contacts = data.value;
+
+                const contactsList = document.getElementById('contacts-list');
+                contactsList.innerHTML = '';
+
+                contacts.forEach(contact => {
+                    const row = document.createElement('tr');
+                    row.id = 'row_' + contact.id;
+
+                    row.innerHTML = `
+                        <td><input type="text" id="first-name" value=${contact.firstName}></td>
+                        <td><input type="text" id="last-name" value=${contact.lastName}></td>
+                        <td><input type="text" id="email" value=${contact.email}></td>
+                        <td><input type="password" id="password" value=${contact.password}></td>
+                        <td><input type="text" id="phone-number" value=${contact.phone}></td>
+                        <td><input type="date" id="birth-date" value=${contact.birthDate}></td>
+                        <td><select id="category" onchange="updateSubCategoryEdit(${contact.id})"></select></td>
+                        <td><select id="sub-category"></select></td>
+                        <!-- Możesz odkomentować przyciski edycji i usuwania -->
+                        <td>
+                            <button onclick="editContact(${contact.id})">Edytuj</button>
+                            <button onclick="deleteContact(${contact.id})">Usuń</button>
+                        </td>
+                    `;
+                    contactsList.appendChild(row);
+                    updateEditForm(contact.id, contact.category, contact.subCategory);
+                });
+
+                document.getElementById('logout-form').style.display = 'block';
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('add-contact').style.display = 'block';
+
+                updateAddForm();
+
+            } catch (error) {
+                console.error('Wystąpił błąd podczas pobierania kontaktów:', error);
+                alert('Wystąpił błąd podczas pobierania kontaktów.');
+            }
+        }
+
+        // dodawanie nowego kontaktu
+        async function addContact() {
+            const password = document.querySelector('#add-contact #password').value
+            if (validatePassword(password)){
+                const contact = {
+                    id: 0,
+                    firstName: document.querySelector('#add-contact #first-name').value,
+                    lastName: document.querySelector('#add-contact #last-name').value,
+                    email: document.querySelector('#add-contact #email').value,
+                    password: document.querySelector('#add-contact #password').value,
+                    category: document.querySelector('#add-contact #category').value,
+                    subCategory: document.querySelector('#add-contact #sub-category').value,
+                    phone: document.querySelector('#add-contact #phone-number').value,
+                    birthDate: document.querySelector('#add-contact #birth-date').value,
+                };
+
+                const response = await fetch('https://localhost:44320/api/Contact/CreateEdit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(contact)
+                });
+
+                if (response.ok) {
+                    loadContactsPrivate();
+                } else {
+                    alert('Wystąpił błąd przy dodawaniu kontaktu');
+                }
+            }
+        }
+
+        // usuwanie kontaktu
+        async function deleteContact(id) {
+            const url = `https://localhost:44320/api/Contact/Delete/${id}`;
+            const options = {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            try {
+                const response = await fetch(url, options);
+                if (response.ok) {
+                    const jsonResponse = await response.json();
+                    console.log('Usunięto kontakt:', jsonResponse);
+                    loadContactsPrivate();
+                }
+            } catch (error) {
+                alert("Wystąpił błąd podczas usuwania kontaktu")
+            }
+        }
+
+
+        // aktualizacja części dodającej nowy kontakt
+        async function updateAddForm() {
+            const url = 'https://localhost:44320/api/Category/GetAll';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const options = data.value;
+                const category = document.querySelector('#add-contact #category');
+                category.innerHTML = '';
+                options.forEach(option => {
+                    const newOption = document.createElement("option");
+                    newOption.value = option.name;
+                    newOption.text = option.name;
+                    category.add(newOption);
+                });
+
+                updateSubCategory() 
+            } catch (error) {
+                alert('Wystąpił błąd przy wczytywaniu kontaktów');
+            }
+        }
+
+        // aktualizacja części dodającej nowy kontakt
+        async function updateEditForm(id, selected, subCategory=null) {
+            const url = 'https://localhost:44320/api/Category/GetAll';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const options = data.value;
+                const category = document.querySelector('#row_' + id + ' #category');
+                category.innerHTML = '';
+                options.forEach(option => {
+                    const newOption = document.createElement("option");
+                    newOption.value = option.name;
+                    newOption.text = option.name;
+                    category.add(newOption);
+                });
+                category.value = selected;
+                if (subCategory != null){
+                    updateSubCategoryEdit(id, subCategory);
+                }
+            } catch (error) {
+                alert('Wystąpił błąd przy wczytywaniu kategorii');
+            }
+        }
+
+        // aktualizacja podkategorii w części dodającej nowy kontakt
+        async function updateSubCategory() {
+            const category = document.querySelector('#add-contact #category').value;
+            const subCategory = document.querySelector('#add-contact #sub-category');
+            const subCategoryContainer = document.querySelector('#add-contact');
+            let options = [];
+
+            // Set options based on the selected category
+            if (category === "prywatny") {
+                const newSubCategory = document.createElement('select');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.style.width = '220px';
+                options = [
+                    {value: "prywatny", text: "prywatny"}
+                ];
+                options.forEach(option => {
+                    const newOption = document.createElement("option");
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newSubCategory.add(newOption);
+                });
+                subCategoryContainer.replaceChild(newSubCategory, subCategory);
+            } else if (category === "służbowy") {
+                const newSubCategory = document.createElement('select');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.style.width = '220px';
+
+                const url = 'https://localhost:44320/api/SubCategory/GetAll';   
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    const options = data.value;
+                    options.forEach(option => {
+                        const newOption = document.createElement("option");
+                        newOption.value = option.name;
+                        newOption.text = option.name;
+                        newSubCategory.add(newOption);
+                    });
+                    subCategoryContainer.replaceChild(newSubCategory, subCategory);
+                } catch (error) {
+                    alert('Wystąpił błąd przy wczytywaniu podkategorii');
+                }
+            } else if (category === "inny") {
+                const newSubCategory = document.createElement('input');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.type = 'text';
+                newSubCategory.style.width = '200px';
+                subCategoryContainer.replaceChild(newSubCategory, subCategory);
+            } else {
+                const newSubCategory = document.createElement('input');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.type = 'text';
+                newSubCategory.style.width = '200px';
+                subCategoryContainer.replaceChild(newSubCategory, subCategory);
+            }
+        }
+
+        // aktualizacja podkategorii w części edytującej istniejący kontakt
+        async function updateSubCategoryEdit(id, selected=null) {
+            const category = document.querySelector('#row_' + id + ' #category').value;
+            const subCategory = document.querySelector('#row_' + id + ' #sub-category');
+            const subCategoryContainer = document.querySelector('#row_' + id);
+            let options = [];
+
+            // Set options based on the selected category
+            if (category === "prywatny") {
+                const newSubCategory = document.createElement('select');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.style.width = '220px';
+                options = [
+                    {value: "prywatny", text: "prywatny"}
+                ];
+                options.forEach(option => {
+                    const newOption = document.createElement("option");
+                    newOption.value = option.value;
+                    newOption.text = option.text;
+                    newSubCategory.add(newOption);
+                });
+                if (selected != null) {
+                    newSubCategory.value = selected;
+                }
+                var parentNode = subCategory.parentNode;
+                parentNode.replaceChild(newSubCategory, subCategory);
+            } else if (category === "służbowy") {
+                const newSubCategory = document.createElement('select');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.style.width = '220px';
+
+                const url = 'https://localhost:44320/api/SubCategory/GetAll';   
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    const options = data.value;
+                    options.forEach(option => {
+                        const newOption = document.createElement("option");
+                        newOption.value = option.name;
+                        newOption.text = option.name;
+                        newSubCategory.add(newOption);
+                    });
+                    if (selected != null) {
+                        newSubCategory.value = selected;
+                    }
+                    var parentNode = subCategory.parentNode;
+                    parentNode.replaceChild(newSubCategory, subCategory);
+                } catch (error) {
+                    alert('Wystąpił błąd przy wczytywaniu podkategorii');
+                }
+            } else if (category === "inny") {
+                const newSubCategory = document.createElement('input');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.type = 'text';
+                newSubCategory.style.width = '200px';
+                if (selected != null) {
+                    newSubCategory.value = selected;
+                }
+                var parentNode = subCategory.parentNode;
+                parentNode.replaceChild(newSubCategory, subCategory);
+            } else {
+                const newSubCategory = document.createElement('input');
+                newSubCategory.id = 'sub-category';
+                newSubCategory.type = 'text';
+                newSubCategory.style.width = '200px';
+                if (selected != null) {
+                    newSubCategory.value = selected;
+                }
+                var parentNode = subCategory.parentNode;
+                parentNode.replaceChild(newSubCategory, subCategory);
+            }
+        }
+
+        // walidacja hasła
+        function validatePassword(password) {
+            const minLength = 8;
+            const regexUpperCase = /[A-Z]/;
+            const regexLowerCase = /[a-z]/;
+            const regexDigit = /[0-9]/;
+            const regexSpecialChar = /[!@#$%^&*(),.?":{}|<>]/;
+
+            if (password.length < minLength) {
+                alert('Hasło musi mieć co najmniej ' + minLength + ' znaków.');
+
+            }
+            else if (!regexUpperCase.test(password)) {
+                alert('Hasło musi zawierać co najmniej jedną wielką literę.');
+            }
+            else if (!regexLowerCase.test(password)) {
+                alert('Hasło musi zawierać co najmniej jedną małą literę.');
+            }
+            else if (!regexDigit.test(password)) {
+                alert('Hasło musi zawierać co najmniej jedną cyfrę.');
+            }
+            else if (!regexSpecialChar.test(password)) {
+                alert('Hasło musi zawierać co najmniej jeden znak specjalny.');
+            }
+            else {
+                return true;
+            }
+            return false;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadContactsPublic());
+    </script>
+</body>
+</html>
